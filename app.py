@@ -1,3 +1,6 @@
+# app.py
+
+```python
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -8,149 +11,85 @@ app = FastAPI()
 class TempData(BaseModel):
     nodo: str
     temp: float
+    lat: float
+    lon: float
 
 nodos = {}
 
-@app.post("/temperatura")
+@app.post('/temperatura')
 async def temperatura(data: TempData):
 
     nodos[data.nodo] = {
-        "temp": round(data.temp, 1),
-        "hora": datetime.now().strftime("%H:%M:%S")
+        'temp': round(data.temp, 1),
+        'lat': data.lat,
+        'lon': data.lon,
+        'hora': datetime.now().strftime('%H:%M:%S')
     }
 
     print(nodos)
 
-    return {"ok": True}
+    return {'ok': True}
 
-@app.get("/api/datos")
+@app.get('/api/datos')
 async def api_datos():
-
     return nodos
 
-@app.get("/", response_class=HTMLResponse)
-async def dashboard():
+@app.get('/', response_class=HTMLResponse)
+async def mapa():
 
     html = """
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
-
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa Térmico ESP32</title>
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
-<title>Red Ambiental ESP32</title>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <style>
 
 body {
-
     margin: 0;
-    font-family: Arial, sans-serif;
     background: #0f172a;
     color: white;
+    font-family: Arial;
 }
 
-header {
+#map {
+    height: 100vh;
+    width: 100%;
+}
 
-    background: #111827;
-    padding: 20px;
-    text-align: center;
-    font-size: 32px;
+.panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+
+    background: rgba(15,23,42,0.95);
+
+    padding: 15px;
+
+    border-radius: 15px;
+
+    min-width: 250px;
+
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+.titulo {
+    font-size: 22px;
     font-weight: bold;
-    border-bottom: 2px solid #1e293b;
-}
-
-.subtitulo {
-
-    text-align: center;
-    color: #94a3b8;
-    margin-top: 10px;
-    font-size: 14px;
-}
-
-.grid {
-
-    display: grid;
-
-    grid-template-columns:
-    repeat(auto-fit, minmax(250px, 1fr));
-
-    gap: 20px;
-
-    padding: 20px;
-}
-
-.card {
-
-    background: #1e293b;
-
-    border-radius: 20px;
-
-    padding: 20px;
-
-    box-shadow: 0 0 20px rgba(0,0,0,0.3);
-
-    transition: 0.2s;
-}
-
-.card:hover {
-
-    transform: scale(1.03);
-}
-
-.nodo {
-
-    font-size: 24px;
-    font-weight: bold;
-    margin-bottom: 15px;
-}
-
-.temp {
-
-    font-size: 50px;
-    font-weight: bold;
-    color: #38bdf8;
-}
-
-.hora {
-
-    margin-top: 10px;
-    color: #94a3b8;
+    margin-bottom: 10px;
 }
 
 .estado {
-
-    margin-top: 15px;
-
-    display: inline-block;
-
-    padding: 8px 14px;
-
-    border-radius: 12px;
-
-    background: #22c55e;
-
-    color: white;
-
-    font-weight: bold;
-}
-
-.gateway {
-
-    border: 2px solid #f59e0b;
-}
-
-.footer {
-
-    text-align: center;
-
-    color: #64748b;
-
-    margin-bottom: 20px;
+    margin-top: 10px;
+    color: #38bdf8;
 }
 
 </style>
@@ -159,89 +98,98 @@ header {
 
 <body>
 
-<header>
+<div class="panel">
 
+<div class="titulo">
 🌎 RED AMBIENTAL ESP32
+</div>
 
-</header>
+<div>
+Mapa térmico en tiempo real
+</div>
 
-<div class="subtitulo">
-
-Monitoreo en tiempo real de temperatura de nodos ESP32
+<div class="estado" id="estado">
+Actualizando...
+</div>
 
 </div>
 
-<div class="grid" id="grid"></div>
-
-<div class="footer">
-
-Actualización automática cada 2 segundos
-
-</div>
+<div id="map"></div>
 
 <script>
 
-async function cargarDatos() {
+const map = L.map('map').setView(
+[-33.3913, -56.5192],
+17
+);
+
+L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+{
+    attribution: 'OpenStreetMap'
+}
+).addTo(map);
+
+let markers = [];
+let circles = [];
+
+function colorTemp(temp) {
+
+    if (temp < 20) return '#00bfff';
+    if (temp < 30) return '#22c55e';
+    if (temp < 40) return '#f59e0b';
+
+    return '#ef4444';
+}
+
+async function actualizar() {
 
     try {
 
-        const response =
-        await fetch('/api/datos');
+        const response = await fetch('/api/datos');
 
-        const datos =
-        await response.json();
+        const datos = await response.json();
 
-        const grid =
-        document.getElementById('grid');
+        markers.forEach(m => map.removeLayer(m));
+        circles.forEach(c => map.removeLayer(c));
 
-        grid.innerHTML = '';
+        markers = [];
+        circles = [];
 
         for (const nodo in datos) {
 
             const info = datos[nodo];
 
-            const esGateway =
-            nodo === 'GATEWAY';
+            const color = colorTemp(info.temp);
 
-            const card =
-            document.createElement('div');
+            const marker = L.marker([
+                info.lat,
+                info.lon
+            ]).addTo(map);
 
-            card.className =
-            esGateway
-            ? 'card gateway'
-            : 'card';
+            marker.bindPopup(`
+                <b>${nodo}</b><br>
+                🌡 ${info.temp} °C<br>
+                ⏰ ${info.hora}
+            `);
 
-            card.innerHTML = `
+            const circle = L.circle([
+                info.lat,
+                info.lon
+            ], {
+                color: color,
+                fillColor: color,
+                fillOpacity: 0.4,
+                radius: 35
+            }).addTo(map);
 
-                <div class="nodo">
-
-                    ${esGateway ? '📡' : '📟'}
-
-                    ${nodo}
-
-                </div>
-
-                <div class="temp">
-
-                    🌡 ${info.temp} °C
-
-                </div>
-
-                <div class="hora">
-
-                    ⏰ ${info.hora}
-
-                </div>
-
-                <div class="estado">
-
-                    ONLINE
-
-                </div>
-            `;
-
-            grid.appendChild(card);
+            markers.push(marker);
+            circles.push(circle);
         }
+
+        document.getElementById('estado').innerHTML =
+        'Última actualización: ' +
+        new Date().toLocaleTimeString();
 
     } catch (error) {
 
@@ -249,15 +197,298 @@ async function cargarDatos() {
     }
 }
 
-cargarDatos();
+actualizar();
 
-setInterval(cargarDatos, 2000);
+setInterval(actualizar, 500);
 
 </script>
 
 </body>
-
 </html>
     """
 
     return HTMLResponse(content=html)
+```
+
+---
+
+# CÓDIGO GATEWAY ESP32
+
+```cpp
+#include <WiFi.h>
+#include <esp_now.h>
+#include <esp_wifi.h>
+#include <HTTPClient.h>
+
+const char* ssid = "Gabriela";
+const char* password = "52959534";
+
+const char* serverUrl =
+"https://red-ambiental-servidor.onrender.com/temperatura";
+
+#define LED_PIN 2
+
+float LATITUD = -33.39145024052057;
+float LONGITUD = -56.51992894878338;
+
+String NOMBRE = "GATEWAY";
+
+typedef struct struct_message {
+
+  char nodo[16];
+  float temperatura;
+  float lat;
+  float lon;
+
+} struct_message;
+
+struct_message incomingData;
+
+void parpadear() {
+
+  digitalWrite(LED_PIN, HIGH);
+  delay(50);
+  digitalWrite(LED_PIN, LOW);
+}
+
+void enviarServidor(
+  String nodo,
+  float temp,
+  float lat,
+  float lon
+) {
+
+  HTTPClient http;
+
+  http.begin(serverUrl);
+
+  http.addHeader(
+    "Content-Type",
+    "application/json"
+  );
+
+  String json = "{";
+
+  json += "\"nodo\":\"" + nodo + "\",";
+  json += "\"temp\":" + String(temp) + ",";
+  json += "\"lat\":" + String(lat, 6) + ",";
+  json += "\"lon\":" + String(lon, 6);
+
+  json += "}";
+
+  int httpCode = http.POST(json);
+
+  Serial.println(json);
+
+  Serial.print("HTTP: ");
+  Serial.println(httpCode);
+
+  http.end();
+}
+
+void OnDataRecv(
+  const esp_now_recv_info *info,
+  const uint8_t *incomingDataBytes,
+  int len
+) {
+
+  memcpy(
+    &incomingData,
+    incomingDataBytes,
+    sizeof(incomingData)
+  );
+
+  Serial.println("====================");
+  Serial.println("NODO RECIBIDO");
+
+  Serial.print("Nodo: ");
+  Serial.println(incomingData.nodo);
+
+  Serial.print("Temp: ");
+  Serial.println(incomingData.temperatura);
+
+  enviarServidor(
+    incomingData.nodo,
+    incomingData.temperatura,
+    incomingData.lat,
+    incomingData.lon
+  );
+
+  parpadear();
+}
+
+void setup() {
+
+  Serial.begin(115200);
+
+  pinMode(LED_PIN, OUTPUT);
+
+  WiFi.mode(WIFI_STA);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("WIFI OK");
+
+  esp_wifi_set_channel(
+    WiFi.channel(),
+    WIFI_SECOND_CHAN_NONE
+  );
+
+  if (esp_now_init() != ESP_OK) {
+
+    Serial.println("Error ESP-NOW");
+    return;
+  }
+
+  esp_now_register_recv_cb(OnDataRecv);
+}
+
+void loop() {
+
+  float temp = temperatureRead();
+
+  enviarServidor(
+    NOMBRE,
+    temp,
+    LATITUD,
+    LONGITUD
+  );
+
+  Serial.println("====================");
+  Serial.println("GATEWAY ONLINE");
+
+  Serial.print("Temp: ");
+  Serial.println(temp);
+
+  parpadear();
+
+  delay(2000);
+}
+```
+
+---
+
+# CÓDIGO NODO ESP32
+
+MODIFICÁS SOLO:
+
+* nombre
+* latitud
+* longitud
+
+```cpp
+#include <WiFi.h>
+#include <esp_now.h>
+#include <esp_wifi.h>
+
+#define LED_PIN 2
+#define WIFI_CHANNEL 6
+
+String NOMBRE = "ESP1";
+
+float LATITUD = -33.39111587564696;
+float LONGITUD = -56.51843195456958;
+
+uint8_t broadcastAddress[] =
+{0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+
+typedef struct struct_message {
+
+  char nodo[16];
+  float temperatura;
+  float lat;
+  float lon;
+
+} struct_message;
+
+struct_message datos;
+
+void parpadear() {
+
+  digitalWrite(LED_PIN, HIGH);
+  delay(50);
+  digitalWrite(LED_PIN, LOW);
+}
+
+void setup() {
+
+  Serial.begin(115200);
+
+  pinMode(LED_PIN, OUTPUT);
+
+  WiFi.mode(WIFI_STA);
+
+  esp_wifi_set_channel(
+    WIFI_CHANNEL,
+    WIFI_SECOND_CHAN_NONE
+  );
+
+  if (esp_now_init() != ESP_OK) {
+
+    Serial.println("Error ESP-NOW");
+    return;
+  }
+
+  esp_now_peer_info_t peerInfo = {};
+
+  memcpy(peerInfo.peer_addr,
+         broadcastAddress,
+         6);
+
+  peerInfo.channel = WIFI_CHANNEL;
+  peerInfo.encrypt = false;
+
+  esp_now_add_peer(&peerInfo);
+
+  Serial.println("Nodo listo");
+}
+
+void loop() {
+
+  NOMBRE.toCharArray(datos.nodo, 16);
+
+  datos.temperatura = temperatureRead();
+
+  datos.lat = LATITUD;
+  datos.lon = LONGITUD;
+
+  esp_now_send(
+    broadcastAddress,
+    (uint8_t *) &datos,
+    sizeof(datos)
+  );
+
+  Serial.println("====================");
+
+  Serial.print("Nodo: ");
+  Serial.println(datos.nodo);
+
+  Serial.print("Temp: ");
+  Serial.println(datos.temperatura);
+
+  parpadear();
+
+  delay(2000);
+}
+```
+
+---
+
+# AGREGAR MÁS ESP32
+
+Solo cambiás:
+
+```cpp
+String NOMBRE = "ESP2";
+
+float LATITUD = XXXXX;
+float LONGITUD = XXXXX;
+```
+
+Y cargás el mismo código.
