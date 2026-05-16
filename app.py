@@ -13,12 +13,7 @@ async def temperatura(data: dict):
 
     return {"ok": True}
 
-@app.get("/")
-async def inicio():
-
-    return {"servidor": "activo"}
-
 @app.get("/datos")
-async def ver_datos():
+async def ver():
 
     return datos
