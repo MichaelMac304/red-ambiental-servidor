@@ -12,6 +12,8 @@ async def temperatura(data: dict):
 
     nodos[nodo] = temp
 
+    print(nodos)
+
     return {"ok": True}
 
 @app.get("/")
