@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Red Ambiental</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  display: flex;
+}
+
+#map {
+  width: 80%;
+  height: 100vh;
+}
+
+#panel {
+  width: 20%;
+  height: 100vh;
+  background: #0f0f0f;
+  color: white;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.card {
+  background: #1e1e1e;
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+h2 {
+  font-size: 14px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div id="panel">
+  <h2>📡 Nodos en vivo</h2>
+  <div id="nodes"></div>
+</div>
+
+<script>
+
+var map = L.map('map').setView([-34.9, -56.16], 12);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: ''
+}).addTo(map);
+
+let markers = {};
+
+function color(temp){
+  if(temp > 40) return "red";
+  if(temp > 25) return "orange";
+  return "blue";
+}
+
+async function update(){
+
+  let res = await fetch("/nodes");
+  let data = await res.json();
+
+  document.getElementById("nodes").innerHTML = "";
+
+  Object.values(data).forEach(n => {
+
+    document.getElementById("nodes").innerHTML += `
+      <div class="card">
+        <b>${n.id}</b><br>
+        🌡 ${n.temp}°C<br>
+        📍 ${n.lat}, ${n.lon}
+      </div>
+    `;
+
+    let c = color(n.temp);
+
+    if(!markers[n.id]){
+      markers[n.id] = L.circleMarker([n.lat, n.lon], {
+        radius: 10,
+        color: c,
+        fillColor: c,
+        fillOpacity: 0.7
+      }).addTo(map);
+    } else {
+      markers[n.id].setLatLng([n.lat, n.lon]);
+    }
+
+  });
+}
+
+setInterval(update, 2000);
+update();
+
+</script>
+
+</body>
+</html>
