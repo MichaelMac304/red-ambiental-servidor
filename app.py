@@ -2,18 +2,25 @@ from fastapi import FastAPI
 
 app = FastAPI()
 
-datos = []
+nodos = {}
 
 @app.post("/temperatura")
 async def temperatura(data: dict):
 
-    datos.append(data)
+    nodo = data["nodo"]
+    temp = data["temp"]
 
-    print(data)
+    nodos[nodo] = temp
 
     return {"ok": True}
 
-@app.get("/datos")
-async def ver():
+@app.get("/")
+async def inicio():
 
-    return datos
+    texto = ""
+
+    for nodo, temp in nodos.items():
+
+        texto += f"{nodo}: {temp} °C\n"
+
+    return texto
