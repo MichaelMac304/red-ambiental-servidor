@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 
 app = FastAPI()
 
@@ -16,7 +15,7 @@ nodes = {}
 @app.post("/data")
 async def data(payload: dict):
     nodes[payload["id"]] = payload
-    return {"status": "ok"}
+    return {"ok": True}
 
 @app.get("/nodes")
 def get_nodes():
