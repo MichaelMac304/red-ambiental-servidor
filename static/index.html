@@ -2,43 +2,33 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Red Ambiental IoT</title>
+<title>IoT Debug Map</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <style>
-body {
-  margin: 0;
-  font-family: Arial;
-  display: flex;
-  background: #0e0e0e;
-  color: white;
-}
+body { margin:0; display:flex; font-family:Arial; background:#0e0e0e; color:white; }
 
-#map {
-  width: 80%;
-  height: 100vh;
-}
+#map { width:75%; height:100vh; }
 
 #panel {
-  width: 20%;
-  height: 100vh;
-  background: #111;
-  padding: 10px;
-  overflow-y: auto;
+  width:25%;
+  background:#111;
+  padding:10px;
+  overflow:auto;
 }
 
 .card {
-  background: #1e1e1e;
-  padding: 10px;
-  margin-bottom: 10px;
-  border-radius: 10px;
+  background:#222;
+  padding:8px;
+  margin-bottom:8px;
+  border-radius:8px;
+  font-size:13px;
 }
 
-h2 {
-  font-size: 14px;
-}
+.ok { color:lime; }
+.bad { color:red; }
 </style>
 </head>
 
@@ -47,122 +37,66 @@ h2 {
 <div id="map"></div>
 
 <div id="panel">
-  <h2>📡 Nodos en vivo</h2>
+  <h3>📡 DEBUG NODOS</h3>
   <div id="nodes"></div>
 </div>
 
 <script>
 
-// ================= MAPA =================
 var map = L.map('map').setView([-33.3918, -56.5189], 18);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: ''
 }).addTo(map);
 
-// ================= VARIABLES =================
 let markers = {};
-let lines = {};
-let heatLayers = {};
 
-// ================= COLOR POR TEMPERATURA =================
-function getColor(temp) {
-  if (temp > 40) return "#ff0000";
-  if (temp > 25) return "#ff8800";
-  return "#00aaff";
+function color(t){
+  if(t > 40) return "red";
+  if(t > 25) return "orange";
+  return "blue";
 }
 
-// ================= DIBUJAR LÍNEA =================
-function drawLine(n1, n2) {
+async function update(){
 
-  let key = n1.id + "-" + n2.id;
+  try {
 
-  let latlngs = [
-    [n1.lat, n1.lon],
-    [n2.lat, n2.lon]
-  ];
+    let res = await fetch("https://red-ambiental-servidor.onrender.com/nodes");
+    let data = await res.json();
 
-  if (!lines[key]) {
-    lines[key] = L.polyline(latlngs, {
-      color: "cyan",
-      weight: 3,
-      opacity: 0.8
-    }).addTo(map);
-  } else {
-    lines[key].setLatLngs(latlngs);
-  }
-}
+    console.log("SERVER DATA:", data);
 
-// ================= HEAT SIMPLIFICADO =================
-function drawHeat(n) {
+    document.getElementById("nodes").innerHTML = "";
 
-  let key = "heat-" + n.id;
+    Object.values(data).forEach(n => {
 
-  let color = getColor(n.temp);
+      document.getElementById("nodes").innerHTML += `
+        <div class="card">
+          <b>${n.id}</b><br>
+          🌡 ${n.temp}°C<br>
+          📍 ${n.lat}, ${n.lon}
+        </div>
+      `;
 
-  if (!heatLayers[key]) {
-    heatLayers[key] = L.circle([n.lat, n.lon], {
-      radius: 120,
-      color: color,
-      fillColor: color,
-      fillOpacity: 0.25
-    }).addTo(map);
-  } else {
-    heatLayers[key].setLatLng([n.lat, n.lon]);
-    heatLayers[key].setStyle({
-      color: color,
-      fillColor: color
+      let c = color(n.temp);
+
+      if(!markers[n.id]){
+        markers[n.id] = L.circleMarker([n.lat, n.lon], {
+          radius: 10,
+          color: c,
+          fillColor: c,
+          fillOpacity: 0.8
+        }).addTo(map);
+      } else {
+        markers[n.id].setLatLng([n.lat, n.lon]);
+        markers[n.id].setStyle({color:c, fillColor:c});
+      }
+
     });
+
+  } catch(e){
+    console.log("ERROR FETCH:", e);
   }
-}
-
-// ================= UPDATE =================
-async function update() {
-
-  let res = await fetch("https://red-ambiental-servidor.onrender.com/nodes");
-  let data = await res.json();
-
-  let nodesArr = Object.values(data);
-
-  document.getElementById("nodes").innerHTML = "";
-
-  // buscar gateway
-  let gateway = nodesArr.find(n => n.id === "GATEWAY");
-
-  nodesArr.forEach(n => {
-
-    // PANEL
-    document.getElementById("nodes").innerHTML += `
-      <div class="card">
-        <b>${n.id}</b><br>
-        🌡 ${n.temp}°C<br>
-        📍 ${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}
-      </div>
-    `;
-
-    // MARKER
-    let c = getColor(n.temp);
-
-    if (!markers[n.id]) {
-      markers[n.id] = L.circleMarker([n.lat, n.lon], {
-        radius: 8,
-        color: c,
-        fillColor: c,
-        fillOpacity: 0.9
-      }).addTo(map).bindPopup(n.id);
-    } else {
-      markers[n.id].setLatLng([n.lat, n.lon]);
-      markers[n.id].setStyle({ color: c, fillColor: c });
-    }
-
-    // HEAT
-    drawHeat(n);
-
-    // LÍNEAS CON GATEWAY
-    if (gateway && n.id !== gateway.id) {
-      drawLine(n, gateway);
-    }
-  });
 }
 
 setInterval(update, 2000);
