@@ -12,18 +12,18 @@ app.add_middleware(
 
 nodes = {}
 
+@app.get("/")
+def root():
+    return {"status":"OK"}
+
 @app.post("/data")
-def data(payload: dict):
+def receive(payload: dict):
 
-    print("RECIBIDO:", payload)
-
-    # 🔥 validación mínima
-    if "id" not in payload:
-        return {"error": "invalid"}
+    print(payload)
 
     nodes[payload["id"]] = payload
 
-    return {"ok": True}
+    return {"ok":True}
 
 @app.get("/nodes")
 def get_nodes():
