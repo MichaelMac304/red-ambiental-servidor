@@ -404,11 +404,12 @@ async function actualizar(){
 
         const hP=nodos.map(n=>fetch(API+'/api/historial/'+encodeURIComponent(n.id)+'?limit=20').then(r=>r.json()).catch(()=>[]));
         const hist=await Promise.all(hP);
+        const histMap={};nodos.forEach((n,i)=>{histMap[n.id]=hist[i];});
 
         nodos.forEach((n,i)=>{
             const esRoot=n.id==='MET-001'||(n.tipo&&n.tipo.includes('ROOT'));
             const mk=L.marker([n.lat,n.lon],{icon:crearIcono(n.temp,esRoot)})
-                .bindPopup('<div class="popup"><div class="popup-id">'+n.id+'</div><div class="popup-type">'+(n.tipo||'ESP32-interno')+(esRoot?' &#183; GATEWAY':'')+'</div><div class="popup-temp '+tempClass(n.temp)+'">'+n.temp+'\\u00b0C</div><div class="popup-time">Actualizado: '+(n.hora||'--')+'</div>'+miniChart(hist[i])+'</div>',{maxWidth:220})
+                .bindPopup('<div class="popup"><div class="popup-id">'+n.id+'</div><div class="popup-type">'+(n.tipo||'ESP32-interno')+(esRoot?' &#183; GATEWAY':'')+'</div><div class="popup-temp '+tempClass(n.temp)+'">'+n.temp+'\\u00b0C</div><div class="popup-time">Actualizado: '+(n.hora||'--')+'</div>'+miniChart(histMap[n.id])+'</div>',{maxWidth:220})
                 .addTo(map);markers.push(mk);
         });
 
@@ -419,7 +420,7 @@ async function actualizar(){
                 +'<div class="scard-top"><div><div class="scard-name">'+n.id+(esRoot?' <span style=\\"color:#06d6a0;font-size:0.7em\\">ROOT</span>':'')+'</div>'
                 +'<div class="scard-type">'+(n.tipo||'ESP32-interno')+'</div></div>'
                 +'<div class="scard-temp '+tempClass(n.temp)+'">'+n.temp+'\\u00b0</div></div>'
-                +miniChart(hist[i])
+                +miniChart(histMap[n.id])
                 +'<div class="scard-bottom"><div class="scard-coord">'+n.lat.toFixed(4)+', '+n.lon.toFixed(4)+'</div>'
                 +'<div class="scard-time"><div class="tdot"></div>'+(n.hora||'--')+'</div></div></div>';
         });
