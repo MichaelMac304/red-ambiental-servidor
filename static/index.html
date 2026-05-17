@@ -2,33 +2,39 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>IoT Debug Map</title>
+<title>Red Ambiental IoT</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <style>
-body { margin:0; display:flex; font-family:Arial; background:#0e0e0e; color:white; }
+body {
+  margin: 0;
+  display: flex;
+  font-family: Arial;
+  background: #0e0e0e;
+  color: white;
+}
 
-#map { width:75%; height:100vh; }
+#map {
+  width: 75%;
+  height: 100vh;
+}
 
 #panel {
-  width:25%;
-  background:#111;
-  padding:10px;
-  overflow:auto;
+  width: 25%;
+  height: 100vh;
+  background: #111;
+  padding: 10px;
+  overflow-y: auto;
 }
 
 .card {
-  background:#222;
-  padding:8px;
-  margin-bottom:8px;
-  border-radius:8px;
-  font-size:13px;
+  background: #1e1e1e;
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
 }
-
-.ok { color:lime; }
-.bad { color:red; }
 </style>
 </head>
 
@@ -37,7 +43,7 @@ body { margin:0; display:flex; font-family:Arial; background:#0e0e0e; color:whit
 <div id="map"></div>
 
 <div id="panel">
-  <h3>📡 DEBUG NODOS</h3>
+  <h3>📡 Nodos</h3>
   <div id="nodes"></div>
 </div>
 
@@ -50,53 +56,75 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 let markers = {};
+let lines = {};
 
-function color(t){
+function getColor(t){
   if(t > 40) return "red";
   if(t > 25) return "orange";
   return "blue";
 }
 
+function drawLine(n1, n2){
+
+  let key = n1.id + "-" + n2.id;
+
+  if(!lines[key]){
+    lines[key] = L.polyline([
+      [n1.lat, n1.lon],
+      [n2.lat, n2.lon]
+    ], {
+      color: "cyan",
+      weight: 3
+    }).addTo(map);
+  } else {
+    lines[key].setLatLngs([
+      [n1.lat, n1.lon],
+      [n2.lat, n2.lon]
+    ]);
+  }
+}
+
 async function update(){
 
-  try {
+  let res = await fetch("/nodes");
+  let data = await res.json();
 
-    let res = await fetch("https://red-ambiental-servidor.onrender.com/nodes");
-    let data = await res.json();
+  let arr = Object.values(data);
 
-    console.log("SERVER DATA:", data);
+  document.getElementById("nodes").innerHTML = "";
 
-    document.getElementById("nodes").innerHTML = "";
+  let gateway = arr.find(n => n.id === "GATEWAY");
 
-    Object.values(data).forEach(n => {
+  arr.forEach(n => {
 
-      document.getElementById("nodes").innerHTML += `
-        <div class="card">
-          <b>${n.id}</b><br>
-          🌡 ${n.temp}°C<br>
-          📍 ${n.lat}, ${n.lon}
-        </div>
-      `;
+    document.getElementById("nodes").innerHTML += `
+      <div class="card">
+        <b>${n.id}</b><br>
+        🌡 ${n.temp}°C<br>
+        📍 ${n.lat}, ${n.lon}
+      </div>
+    `;
 
-      let c = color(n.temp);
+    let c = getColor(n.temp);
 
-      if(!markers[n.id]){
-        markers[n.id] = L.circleMarker([n.lat, n.lon], {
-          radius: 10,
-          color: c,
-          fillColor: c,
-          fillOpacity: 0.8
-        }).addTo(map);
-      } else {
-        markers[n.id].setLatLng([n.lat, n.lon]);
-        markers[n.id].setStyle({color:c, fillColor:c});
-      }
+    if(!markers[n.id]){
+      markers[n.id] = L.circleMarker([n.lat, n.lon], {
+        radius: 8,
+        color: c,
+        fillColor: c,
+        fillOpacity: 0.9
+      }).addTo(map);
+    } else {
+      markers[n.id].setLatLng([n.lat, n.lon]);
+      markers[n.id].setStyle({color:c, fillColor:c});
+    }
 
-    });
+    if(gateway && n.id !== gateway.id){
+      drawLine(n, gateway);
+    }
 
-  } catch(e){
-    console.log("ERROR FETCH:", e);
-  }
+  });
+
 }
 
 setInterval(update, 2000);
