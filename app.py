@@ -32,6 +32,8 @@ class StationData(BaseModel):
     lat: float
     lon: float
     sensor_type: Optional[str] = "ESP32-interno"
+    rssi: Optional[int] = None
+    hops: Optional[int] = None
 
 # =========================
 # MEMORIA DE NODOS
@@ -79,6 +81,8 @@ async def receive_station_data(data: StationData):
         "tipo": data.sensor_type or "ESP32-interno",
         "hora": ahora.strftime("%H:%M:%S"),
         "timestamp": ahora.isoformat(),
+        "rssi": data.rssi,
+        "hops": data.hops if data.hops is not None else 0,
     }
     if data.station_id not in historial:
         historial[data.station_id] = []
@@ -112,8 +116,8 @@ async def api_historial(nodo_id: str, limit: int = 60):
 async def cargar_demo():
     ahora = datetime.now(timezone.utc)
     demos = [
-        {"id": "MET-001", "temp": 44.4, "lat": -33.391898, "lon": -56.518949, "tipo": "ESP32-interno (ROOT)"},
-        {"id": "MET-002", "temp": 51.1, "lat": -33.391126, "lon": -56.518502, "tipo": "ESP32-interno (NODO)"},
+        {"id": "MET-001", "temp": 44.4, "lat": -33.391898, "lon": -56.518949, "tipo": "ESP32-interno (ROOT)", "rssi": -45, "hops": 0},
+        {"id": "MET-002", "temp": 51.1, "lat": -33.391126, "lon": -56.518502, "tipo": "ESP32-interno (NODO)", "rssi": -62, "hops": 1},
     ]
     for d in demos:
         d["hora"] = ahora.strftime("%H:%M:%S")
@@ -228,6 +232,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
 .scard-coord{font-size:0.65em;color:var(--text2);font-family:monospace}
 .scard-time{font-size:0.65em;color:var(--text2);display:flex;align-items:center;gap:4px}
 .scard-time .tdot{width:5px;height:5px;border-radius:50%;background:#22c55e}
+.scard-signal{display:flex;align-items:center;gap:6px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
+.signal-bars{display:flex;align-items:flex-end;gap:1px;height:14px}
+.signal-bars .bar{width:3px;border-radius:1px;background:var(--border);transition:background 0.3s}
+.signal-bars .bar.active{background:var(--accent)}
+.signal-bars .bar.warn{background:var(--warm)}
+.signal-bars .bar.bad{background:var(--hot)}
+.signal-val{font-size:0.65em;color:var(--text2);font-family:monospace}
+.signal-hops{font-size:0.6em;color:var(--text2);margin-left:auto;background:var(--bg);padding:1px 6px;border-radius:4px}
 
 .sidebar-footer{
     padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;
@@ -363,6 +375,27 @@ function miniChart(datos){
     });
     return'<div class="minichart">'+b+'</div>';
 }
+function signalBars(rssi){
+    if(rssi===null||rssi===undefined)return'';
+    const abs=Math.abs(rssi);
+    let level=0,cls='active';
+    if(abs<=50){level=4;cls='active';}
+    else if(abs<=65){level=3;cls='active';}
+    else if(abs<=75){level=2;cls='warn';}
+    else{level=1;cls='bad';}
+    const heights=[4,7,10,14];
+    let bars='';
+    for(let i=0;i<4;i++){
+        const on=i<level;
+        bars+='<div class="bar'+(on?' '+cls:'')+'" style="height:'+heights[i]+'px"></div>';
+    }
+    return'<div class="scard-signal"><div class="signal-bars">'+bars+'</div>'
+        +'<span class="signal-val">'+rssi+' dBm</span>';
+}
+function hopsBadge(hops){
+    if(hops===null||hops===undefined||hops===0)return'';
+    return'<span class="signal-hops">'+hops+' salto'+(hops>1?'s':'')+'</span>';
+}
 
 async function actualizar(){
     try{
@@ -408,8 +441,9 @@ async function actualizar(){
 
         nodos.forEach((n,i)=>{
             const esRoot=n.id==='MET-001'||(n.tipo&&n.tipo.includes('ROOT'));
+            const rssiHtml=n.rssi!=null?'<div style="font-size:0.75em;color:#94a3b8;margin-top:4px">Senal: '+n.rssi+' dBm'+(n.hops?' | '+n.hops+' salto'+(n.hops>1?'s':''):'')+'</div>':'';
             const mk=L.marker([n.lat,n.lon],{icon:crearIcono(n.temp,esRoot)})
-                .bindPopup('<div class="popup"><div class="popup-id">'+n.id+'</div><div class="popup-type">'+(n.tipo||'ESP32-interno')+(esRoot?' &#183; GATEWAY':'')+'</div><div class="popup-temp '+tempClass(n.temp)+'">'+n.temp+'\\u00b0C</div><div class="popup-time">Actualizado: '+(n.hora||'--')+'</div>'+miniChart(histMap[n.id])+'</div>',{maxWidth:220})
+                .bindPopup('<div class="popup"><div class="popup-id">'+n.id+'</div><div class="popup-type">'+(n.tipo||'ESP32-interno')+(esRoot?' &#183; GATEWAY':'')+'</div><div class="popup-temp '+tempClass(n.temp)+'">'+n.temp+'\\u00b0C</div>'+rssiHtml+'<div class="popup-time">Actualizado: '+(n.hora||'--')+'</div>'+miniChart(histMap[n.id])+'</div>',{maxWidth:220})
                 .addTo(map);markers.push(mk);
         });
 
@@ -421,6 +455,7 @@ async function actualizar(){
                 +'<div class="scard-type">'+(n.tipo||'ESP32-interno')+'</div></div>'
                 +'<div class="scard-temp '+tempClass(n.temp)+'">'+n.temp+'\\u00b0</div></div>'
                 +miniChart(histMap[n.id])
+                +signalBars(n.rssi)+hopsBadge(n.hops)+(n.rssi!=null?'</div>':'')
                 +'<div class="scard-bottom"><div class="scard-coord">'+n.lat.toFixed(4)+', '+n.lon.toFixed(4)+'</div>'
                 +'<div class="scard-time"><div class="tdot"></div>'+(n.hora||'--')+'</div></div></div>';
         });
