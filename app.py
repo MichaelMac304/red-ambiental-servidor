@@ -76,6 +76,8 @@ def init_db():
     conn.commit()
     conn.close()
 
+DB_RETENTION_DAYS = int(os.environ.get("DB_RETENTION_DAYS", "30"))
+
 def save_reading(nodo, temp, lat, lon, tipo, rssi, hops, timestamp):
     try:
         conn = get_db()
@@ -86,9 +88,20 @@ def save_reading(nodo, temp, lat, lon, tipo, rssi, hops, timestamp):
     except Exception:
         pass
 
+def cleanup_old_readings():
+    try:
+        desde = (datetime.now(timezone.utc) - timedelta(days=DB_RETENTION_DAYS)).isoformat()
+        conn = get_db()
+        deleted = conn.execute('DELETE FROM lecturas WHERE timestamp < ?', (desde,)).rowcount
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
 @app.on_event("startup")
 async def startup():
     init_db()
+    cleanup_old_readings()
 
 # =========================
 # MEMORIA DE NODOS
@@ -265,6 +278,31 @@ async def set_alertas(config: AlertConfig):
     conn.commit()
     conn.close()
     return {"ok": True}
+
+@app.get("/api/promedios")
+async def api_promedios(horas: int = 24):
+    desde = (datetime.now(timezone.utc) - timedelta(hours=horas)).isoformat()
+    conn = get_db()
+    rows = conn.execute(
+        '''SELECT nodo,
+           strftime('%Y-%m-%dT%H:00:00', timestamp) as hora,
+           ROUND(AVG(temp),1) as prom,
+           ROUND(MIN(temp),1) as min_t,
+           ROUND(MAX(temp),1) as max_t,
+           COUNT(*) as cnt
+        FROM lecturas WHERE timestamp >= ?
+        GROUP BY nodo, strftime('%Y-%m-%dT%H:00:00', timestamp)
+        ORDER BY hora''',
+        (desde,)
+    ).fetchall()
+    conn.close()
+    result = {}
+    for r in rows:
+        nid = r['nodo']
+        if nid not in result:
+            result[nid] = []
+        result[nid].append({'hora': r['hora'], 'prom': r['prom'], 'min': r['min_t'], 'max': r['max_t'], 'lecturas': r['cnt']})
+    return result
 
 @app.get("/api/salud")
 async def salud_red():
@@ -513,8 +551,43 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
 .leaflet-control-layers label{color:var(--text)!important;font-size:0.8em}
 .leaflet-control-layers-separator{border-top-color:var(--border)!important}
 
+.mobile-toggle{display:none;position:fixed;bottom:20px;right:20px;z-index:1100;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#000;font-size:1.4em;cursor:pointer;box-shadow:0 4px 20px var(--glow);transition:transform 0.2s}
+.mobile-toggle:active{transform:scale(0.9)}
+.mobile-close{display:none;position:absolute;top:12px;right:12px;background:none;border:none;color:var(--text2);font-size:1.3em;cursor:pointer;z-index:1101}
+
+.avg-section{margin-top:10px}
+.avg-card{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:all 0.2s}
+.avg-card:hover{border-color:var(--accent)}
+.avg-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.avg-card-name{font-weight:600;font-size:0.85em}
+.avg-card-val{font-size:1.1em;font-weight:700}
+.avg-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.avg-item{font-size:0.68em;color:var(--text2);text-align:center}
+.avg-item .av{display:block;font-weight:600;font-family:monospace;font-size:1.1em}
+.avg-item .av.cool{color:var(--cool)}
+.avg-item .av.warm{color:var(--warm)}
+.avg-item .av.hot{color:var(--hot)}
+
+.notif-row{padding:8px 16px;border-bottom:1px solid var(--border)}
+.btn-notif{width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);font-family:Inter,sans-serif;font-size:0.72em;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.2s}
+.btn-notif:hover{border-color:var(--accent);color:var(--accent)}
+.btn-notif.active{border-color:var(--accent);color:var(--accent);background:rgba(6,214,160,0.08)}
+
 @media(max-width:768px){
-    .sidebar{display:none}.stats{display:none}.header{padding:10px 16px}
+    .stats{display:none}
+    .header{padding:10px 16px}
+    .header .status{display:none}
+    .logo h1{font-size:0.95em}
+    .logo-sub{display:none}
+    .mobile-toggle{display:flex;align-items:center;justify-content:center}
+    .sidebar{
+        position:fixed;top:0;right:-100%;width:85%;max-width:360px;height:100vh;
+        z-index:1100;transition:right 0.3s ease;box-shadow:-4px 0 30px rgba(0,0,0,0.5);
+    }
+    .sidebar.open{right:0}
+    .sidebar.open .mobile-close{display:block}
+    .chart-box{width:95%;padding:14px}
+    .chart-box canvas{height:220px!important}
 }
 </style>
 </head>
@@ -539,7 +612,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
 
 <div class="main">
     <div id="map"></div>
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
+        <button class="mobile-close" onclick="toggleSidebar()">&times;</button>
         <div class="sidebar-header">
             <h2>Estaciones</h2>
             <div class="badge" id="badge-count">0</div>
@@ -552,6 +626,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
         <div class="sidebar-tabs">
             <div class="sidebar-tab active" onclick="switchTab('tab-stations',this)">Estaciones</div>
             <div class="sidebar-tab" onclick="switchTab('tab-alerts',this)">Alertas</div>
+            <div class="sidebar-tab" onclick="switchTab('tab-avg',this)">Promedios</div>
             <div class="sidebar-tab" onclick="switchTab('tab-health',this)">Red</div>
         </div>
         <div id="tab-stations" class="tab-content active">
@@ -581,6 +656,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
             </div>
             <div id="alert-list" style="font-size:0.75em;color:var(--text2)">Sin alertas activas</div>
         </div>
+        <div id="tab-avg" class="tab-content">
+            <div style="font-weight:600;font-size:0.85em;margin-bottom:10px">Promedios por hora (ult. 24h)</div>
+            <div id="avg-list"><div class="empty"><div class="empty-icon">&#128202;</div><h3>Sin datos historicos</h3><p>Carga datos para ver promedios.</p></div></div>
+        </div>
         <div id="tab-health" class="tab-content">
             <div id="health-list"><div class="empty"><div class="empty-icon">&#128225;</div><h3>Sin datos de red</h3><p>Carga datos para ver el estado de la red.</p></div></div>
         </div>
@@ -592,6 +671,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
             <span class="toggle-label">Mostrar lineas mesh</span>
             <label class="toggle"><input type="checkbox" id="toggle-lines" checked onchange="toggleLines()"><span class="slider"></span></label>
         </div>
+        <div class="notif-row">
+            <button class="btn-notif" id="btn-notif" onclick="toggleNotificaciones()">&#128276; Activar notificaciones</button>
+        </div>
         <div class="export-row">
             <button class="btn-export" onclick="exportarCSV()">&#128196; Exportar datos CSV</button>
         </div>
@@ -601,6 +683,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
         </div>
     </div>
 </div>
+<button class="mobile-toggle" onclick="toggleSidebar()">&#9776;</button>
 
 <div id="chart-modal" class="chart-modal" onclick="if(event.target===this)cerrarGrafico()">
     <div class="chart-box">
@@ -631,6 +714,7 @@ let heatLayer=null,markers=[],polylines=[],primeraCarga=true;
 let showMarkers=true,showLines=true;
 let alertConfig={temp_min:0,temp_max:55,activa:true};
 let chartInstance=null;
+let notifEnabled=false;
 
 function tempColorHex(t){
     if(t<20)return'#118ab2';if(t<30)return'#06d6a0';if(t<40)return'#ffd166';return'#ef476f';
@@ -790,6 +874,11 @@ function switchTab(tabId,el){
     document.getElementById(tabId).classList.add('active');
     el.classList.add('active');
     if(tabId==='tab-health')actualizarSalud();
+    if(tabId==='tab-avg')actualizarPromedios();
+}
+
+function toggleSidebar(){
+    document.getElementById('sidebar').classList.toggle('open');
 }
 
 async function cargarAlertConfig(){
@@ -822,6 +911,7 @@ function checkAlerts(nodos){
     if(alertas.length>0){
         banner.style.display='flex';
         document.getElementById('alert-msg').textContent='\\u26a0 '+alertas.join(' | ');
+        sendNotification('\\u26a0 Alerta Red Ambiental',alertas.join('\\n'));
     }else{banner.style.display='none';}
     let aH='';
     if(alertas.length>0){
@@ -883,10 +973,64 @@ function cerrarGrafico(){
     if(chartInstance){chartInstance.destroy();chartInstance=null;}
 }
 
+async function toggleNotificaciones(){
+    const btn=document.getElementById('btn-notif');
+    if(!notifEnabled){
+        if(!('Notification' in window)){alert('Tu navegador no soporta notificaciones');return;}
+        const perm=await Notification.requestPermission();
+        if(perm==='granted'){
+            notifEnabled=true;
+            btn.classList.add('active');
+            btn.innerHTML='&#128276; Notificaciones activas';
+            new Notification('Red Ambiental',{body:'Notificaciones activadas. Recibiras alertas de temperatura.',icon:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">&#127758;</text></svg>'});
+        }
+    }else{
+        notifEnabled=false;
+        btn.classList.remove('active');
+        btn.innerHTML='&#128276; Activar notificaciones';
+    }
+}
+function sendNotification(title,body){
+    if(notifEnabled&&'Notification' in window&&Notification.permission==='granted'){
+        new Notification(title,{body:body,icon:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">&#127758;</text></svg>'});
+    }
+}
+
+async function actualizarPromedios(){
+    try{
+        const r=await fetch(API+'/api/promedios?horas=24');
+        const data=await r.json();
+        const nodos=Object.keys(data);
+        if(nodos.length===0){document.getElementById('avg-list').innerHTML='<div class="empty"><div class="empty-icon">&#128202;</div><h3>Sin datos</h3><p>Carga datos para ver promedios.</p></div>';return;}
+        let h='';
+        nodos.forEach(nid=>{
+            const entries=data[nid];
+            if(!entries||entries.length===0)return;
+            const allProms=entries.map(e=>e.prom);
+            const globalProm=(allProms.reduce((a,b)=>a+b,0)/allProms.length).toFixed(1);
+            const globalMin=Math.min(...entries.map(e=>e.min)).toFixed(1);
+            const globalMax=Math.max(...entries.map(e=>e.max)).toFixed(1);
+            const totalLect=entries.reduce((a,e)=>a+e.lecturas,0);
+            h+='<div class="avg-card" onclick="abrirGrafico(\\''+nid+'\\')">'
+                +'<div class="avg-card-header"><span class="avg-card-name">'+nid+'</span>'
+                +'<span class="avg-card-val tc-warm">'+globalProm+'\\u00b0</span></div>'
+                +'<div class="avg-grid">'
+                +'<div class="avg-item">Min<span class="av cool">'+globalMin+'\\u00b0</span></div>'
+                +'<div class="avg-item">Prom<span class="av warm">'+globalProm+'\\u00b0</span></div>'
+                +'<div class="avg-item">Max<span class="av hot">'+globalMax+'\\u00b0</span></div>'
+                +'</div>'
+                +'<div style="font-size:0.65em;color:var(--text2);margin-top:6px;text-align:center">'+totalLect+' lecturas en '+entries.length+' hora'+(entries.length>1?'s':'')+'</div>'
+                +'</div>';
+        });
+        document.getElementById('avg-list').innerHTML=h;
+    }catch(e){console.error(e);}
+}
+
 cargarAlertConfig();
 actualizar();
 setInterval(actualizar,2000);
 setInterval(()=>{if(document.getElementById('tab-health').classList.contains('active'))actualizarSalud();},5000);
+setInterval(()=>{if(document.getElementById('tab-avg').classList.contains('active'))actualizarPromedios();},10000);
 </script>
 </body>
 </html>"""
