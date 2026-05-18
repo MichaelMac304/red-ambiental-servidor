@@ -93,15 +93,36 @@ async def receive_station_data(data: StationData):
 
 @app.get("/api/datos")
 async def api_datos():
-    return nodos
+    ahora = datetime.now(timezone.utc)
+    resultado = {}
+    for nid, n in nodos.items():
+        copia = dict(n)
+        try:
+            ts = datetime.fromisoformat(n["timestamp"])
+            edad = (ahora - ts).total_seconds()
+            copia["online"] = edad < 30
+        except Exception:
+            copia["online"] = False
+        resultado[nid] = copia
+    return resultado
 
 @app.get("/api/resumen")
 async def api_resumen():
     if not nodos:
-        return {"total": 0, "promedio": None, "minima": None, "maxima": None, "nodos": []}
+        return {"total": 0, "online": 0, "promedio": None, "minima": None, "maxima": None, "nodos": []}
+    ahora = datetime.now(timezone.utc)
+    online_count = 0
+    for n in nodos.values():
+        try:
+            ts = datetime.fromisoformat(n["timestamp"])
+            if (ahora - ts).total_seconds() < 30:
+                online_count += 1
+        except Exception:
+            pass
     temps = [n["temp"] for n in nodos.values()]
     return {
         "total": len(nodos),
+        "online": online_count,
         "promedio": round(sum(temps) / len(temps), 1),
         "minima": round(min(temps), 1),
         "maxima": round(max(temps), 1),
@@ -220,6 +241,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
 }
 .scard.root::before{background:var(--accent)}
 .scard.nodo::before{background:var(--accent2)}
+.scard.offline{opacity:0.5;filter:grayscale(0.8)}
+.scard.offline::before{background:#64748b}
+.scard.offline .scard-temp{color:#64748b}
+.scard.offline .tdot{background:#64748b;animation:none}
 .scard:hover{
     border-color:var(--accent);transform:translateX(-2px);
     box-shadow:0 4px 20px rgba(0,0,0,0.3);
@@ -232,6 +257,15 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
 .scard-coord{font-size:0.65em;color:var(--text2);font-family:monospace}
 .scard-time{font-size:0.65em;color:var(--text2);display:flex;align-items:center;gap:4px}
 .scard-time .tdot{width:5px;height:5px;border-radius:50%;background:#22c55e}
+.offline-badge{font-size:0.6em;color:#64748b;background:#1e293b;padding:1px 6px;border-radius:4px;margin-left:6px}
+.toggle-row{padding:8px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.toggle-label{font-size:0.72em;color:var(--text2);flex:1}
+.toggle{position:relative;width:34px;height:18px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:var(--border);border-radius:18px;transition:0.3s}
+.toggle .slider::before{content:'';position:absolute;width:14px;height:14px;left:2px;bottom:2px;background:var(--text2);border-radius:50%;transition:0.3s}
+.toggle input:checked+.slider{background:var(--accent)}
+.toggle input:checked+.slider::before{transform:translateX(16px);background:#fff}
 .scard-signal{display:flex;align-items:center;gap:6px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
 .signal-bars{display:flex;align-items:flex-end;gap:1px;height:14px}
 .signal-bars .bar{width:3px;border-radius:1px;background:var(--border);transition:background 0.3s}
@@ -331,6 +365,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
                 <p>Enciende tus ESP32 o carga datos de demo para ver la red.</p>
             </div>
         </div>
+        <div class="toggle-row">
+            <span class="toggle-label">Mostrar marcadores</span>
+            <label class="toggle"><input type="checkbox" id="toggle-markers" checked onchange="toggleMarkers()"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+            <span class="toggle-label">Mostrar lineas mesh</span>
+            <label class="toggle"><input type="checkbox" id="toggle-lines" checked onchange="toggleLines()"><span class="slider"></span></label>
+        </div>
         <div class="sidebar-footer">
             <button class="btn btn-primary" onclick="actualizar()">Actualizar</button>
             <button class="btn btn-secondary" onclick="cargarDemo()">Demo</button>
@@ -349,12 +391,19 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
 }).addTo(map);
 
 let heatLayer=null,markers=[],polylines=[],primeraCarga=true;
+let showMarkers=true,showLines=true;
 
 function tempColorHex(t){
     if(t<20)return'#118ab2';if(t<30)return'#06d6a0';if(t<40)return'#ffd166';return'#ef476f';
 }
 function tempClass(t){
     if(t<20)return'tc-cold';if(t<30)return'tc-cool';if(t<40)return'tc-warm';return'tc-hot';
+}
+function crearIconoOffline(temp){
+    const sz=38;
+    return L.divIcon({className:'',
+        html:'<div style="position:relative;background:#475569;width:'+sz+'px;height:'+sz+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-weight:700;font-size:11px;font-family:Inter,sans-serif;border:2px solid #334155;box-shadow:0 2px 10px rgba(0,0,0,0.5);opacity:0.6;filter:grayscale(0.5)">'+Math.round(temp)+'\u00b0</div>',
+        iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]});
 }
 function crearIcono(temp,esRoot){
     const c=tempColorHex(temp),sz=esRoot?44:38,fs=esRoot?13:11;
@@ -428,9 +477,12 @@ async function actualizar(){
             const root=nodos.find(n=>n.id==='MET-001'||(n.tipo&&n.tipo.includes('ROOT')))||nodos[0];
             nodos.forEach(n=>{
                 if(n.id!==root.id){
+                    const isOnline=n.online!==false;
+                    const lnColor=isOnline?'rgba(6,214,160,0.25)':'rgba(100,116,139,0.2)';
                     const pl=L.polyline([[root.lat,root.lon],[n.lat,n.lon]],{
-                        color:'rgba(6,214,160,0.25)',weight:2,dashArray:'8,8'
-                    }).addTo(map);polylines.push(pl);
+                        color:lnColor,weight:2,dashArray:'8,8'
+                    });
+                    if(showLines)pl.addTo(map);polylines.push(pl);
                 }
             });
         }
@@ -441,17 +493,24 @@ async function actualizar(){
 
         nodos.forEach((n,i)=>{
             const esRoot=n.id==='MET-001'||(n.tipo&&n.tipo.includes('ROOT'));
+            const isOnline=n.online!==false;
             const rssiHtml=n.rssi!=null?'<div style="font-size:0.75em;color:#94a3b8;margin-top:4px">Senal: '+n.rssi+' dBm'+(n.hops?' | '+n.hops+' salto'+(n.hops>1?'s':''):'')+'</div>':'';
-            const mk=L.marker([n.lat,n.lon],{icon:crearIcono(n.temp,esRoot)})
-                .bindPopup('<div class="popup"><div class="popup-id">'+n.id+'</div><div class="popup-type">'+(n.tipo||'ESP32-interno')+(esRoot?' &#183; GATEWAY':'')+'</div><div class="popup-temp '+tempClass(n.temp)+'">'+n.temp+'\\u00b0C</div>'+rssiHtml+'<div class="popup-time">Actualizado: '+(n.hora||'--')+'</div>'+miniChart(histMap[n.id])+'</div>',{maxWidth:220})
-                .addTo(map);markers.push(mk);
+            const statusHtml=!isOnline?'<div style="font-size:0.7em;color:#64748b;margin-top:4px">DESCONECTADO</div>':'';
+            const iconFn=isOnline?crearIcono(n.temp,esRoot):crearIconoOffline(n.temp);
+            const tmpCls=isOnline?tempClass(n.temp):'';
+            const tmpStyle=isOnline?'':'style="color:#64748b"';
+            const mk=L.marker([n.lat,n.lon],{icon:iconFn})
+                .bindPopup('<div class="popup"><div class="popup-id">'+n.id+'</div><div class="popup-type">'+(n.tipo||'ESP32-interno')+(esRoot?' &#183; GATEWAY':'')+'</div><div class="popup-temp '+tmpCls+'" '+tmpStyle+'>'+n.temp+'\\u00b0C</div>'+rssiHtml+statusHtml+'<div class="popup-time">Actualizado: '+(n.hora||'--')+'</div>'+miniChart(histMap[n.id])+'</div>',{maxWidth:220});
+            if(showMarkers)mk.addTo(map);markers.push(mk);
         });
 
         let lH='';nodos.sort((a,b)=>a.id.localeCompare(b.id));
         nodos.forEach((n,i)=>{
             const esRoot=n.id==='MET-001'||(n.tipo&&n.tipo.includes('ROOT'));
-            lH+='<div class="scard '+(esRoot?'root':'nodo')+'" onclick="map.setView(['+n.lat+','+n.lon+'],17)">'
-                +'<div class="scard-top"><div><div class="scard-name">'+n.id+(esRoot?' <span style=\\"color:#06d6a0;font-size:0.7em\\">ROOT</span>':'')+'</div>'
+            const isOnline=n.online!==false;
+            const offCls=isOnline?'':'offline';
+            lH+='<div class="scard '+(esRoot?'root':'nodo')+' '+offCls+'" onclick="map.setView(['+n.lat+','+n.lon+'],17)">'
+                +'<div class="scard-top"><div><div class="scard-name">'+n.id+(esRoot?' <span style=\\"color:#06d6a0;font-size:0.7em\\">ROOT</span>':'')+(isOnline?'':'<span class=\\"offline-badge\\">OFFLINE</span>')+'</div>'
                 +'<div class="scard-type">'+(n.tipo||'ESP32-interno')+'</div></div>'
                 +'<div class="scard-temp '+tempClass(n.temp)+'">'+n.temp+'\\u00b0</div></div>'
                 +miniChart(histMap[n.id])
@@ -474,6 +533,15 @@ async function actualizar(){
 
 async function cargarDemo(){
     try{await fetch(API+'/api/demo',{method:'POST'});await actualizar();}catch(e){console.error(e);}
+}
+
+function toggleMarkers(){
+    showMarkers=document.getElementById('toggle-markers').checked;
+    markers.forEach(m=>{if(showMarkers)m.addTo(map);else map.removeLayer(m);});
+}
+function toggleLines(){
+    showLines=document.getElementById('toggle-lines').checked;
+    polylines.forEach(p=>{if(showLines)p.addTo(map);else map.removeLayer(p);});
 }
 
 actualizar();
