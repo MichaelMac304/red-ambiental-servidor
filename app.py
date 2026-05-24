@@ -1059,7 +1059,11 @@ async function actualizar(){
                 +'<div class="scard-top"><div><div class="scard-name">'+n.id+(esRoot?' <span style="color:#06d6a0;font-size:0.7em">ROOT</span>':'')+(isGhost?'<span class="ghost-badge">FANTASMA</span>':'')+(isOn?'':'<span class="offline-badge">OFFLINE</span>')+'</div>'
                 +'<div class="scard-type">'+(n.tipo||'ESP32-interno')+'</div></div>'
                 +'<div class="scard-temp '+tempClass(n.temp)+'">'+n.temp+'&deg;</div></div>'
-                +(!isGhost?'<div style="cursor:pointer" onclick="event.stopPropagation();abrirGrafico(\''+n.id+'\')">'+miniChart(histMap[n.id]||[])+'</div>':'')
+                +(!isGhost
+  ? `<div style="cursor:pointer" onclick="event.stopPropagation();abrirGrafico('${n.id}')">
+      ${miniChart(histMap[n.id]||[])}
+     </div>`
+  : '')
                 +signalBars(n.rssi)+hopsBadge(n.hops)+(n.rssi!=null?'</div>':'')
                 +'<div class="scard-bottom"><div class="scard-coord">'+n.lat.toFixed(4)+', '+n.lon.toFixed(4)+'</div>'
                 +'<div class="scard-time"><div class="tdot"></div>'+(n.hora||'--')+'</div></div></div>';
