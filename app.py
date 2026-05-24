@@ -839,7 +839,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-setTimeout(function(){document.getElementById('splash').classList.add('hidden');},1500);
+function hideSplash(){var el=document.getElementById('splash');if(el)el.classList.add('hidden');}
+hideSplash();
+setTimeout(hideSplash,800);
 
 const API=window.location.origin;
 const darkTile=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'CartoDB',maxZoom:19});
@@ -968,18 +970,18 @@ async function toggleSingleGhost(gid){
 }
 async function actualizarGhostList(){
     if(!ghostsActive)return;
-    try{var r=await fetch(API+'/api/datos');var datos=await r.json();
-    var ghosts=Object.values(datos).filter(function(n){return n.ghost;});
-    if(ghosts.length===0){document.getElementById('ghost-list').innerHTML='';return;}
-    var h='';ghosts.forEach(function(g){var on=g.online!==false;
-       h += `
-<div class="ghost-item" onclick="toggleSingleGhost('${g.id}')">
-    <span class="ghost-item-name">${g.id}</span>
-    <span class="ghost-item-status ${on ? 'on' : 'off'}">
-        ${on ? 'ON' : 'OFF'}
-    </span>
-</div>`;
-    document.getElementById('ghost-list').innerHTML=h;}catch(e){}
+    try{
+        var r=await fetch(API+'/api/datos');
+        var datos=await r.json();
+        var ghosts=Object.values(datos).filter(function(n){return n.ghost;});
+        if(ghosts.length===0){document.getElementById('ghost-list').innerHTML='';return;}
+        var h='';
+        ghosts.forEach(function(g){
+            var on=g.online!==false;
+            h+='<div class="ghost-item" onclick="toggleSingleGhost(\''+g.id+'\')"><span class="ghost-item-name">'+g.id+'</span><span class="ghost-item-status '+(on?'on':'off')+'">'+(on?'ON':'OFF')+'</span></div>';
+        });
+        document.getElementById('ghost-list').innerHTML=h;
+    }catch(e){console.error(e);}
 }
 
 function toggleHeatmap(){showHeatmap=document.getElementById('toggle-heatmap').checked;if(heatLayer){if(showHeatmap)map.addLayer(heatLayer);else map.removeLayer(heatLayer);}}
