@@ -978,7 +978,7 @@ async function actualizarGhostList(){
         var h='';
         ghosts.forEach(function(g){
             var on=g.online!==false;
-            h+='<div class="ghost-item" onclick="toggleSingleGhost(\''+g.id+'\')"><span class="ghost-item-name">'+g.id+'</span><span class="ghost-item-status '+(on?'on':'off')+'">'+(on?'ON':'OFF')+'</span></div>';
+           h+='<div class="ghost-item" onclick="toggleSingleGhost(\''+g.id+'\')"><span class="ghost-item-name">'+g.id+'</span><span class="ghost-item-status '+(on?'on':'off')+'">'+(on?'ON':'OFF')+'</span></div>';
         });
         document.getElementById('ghost-list').innerHTML=h;
     }catch(e){console.error(e);}
