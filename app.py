@@ -947,7 +947,7 @@ async function actualizarGhostList(){
     var ghosts=Object.values(datos).filter(function(n){return n.ghost;});
     if(ghosts.length===0){document.getElementById('ghost-list').innerHTML='';return;}
     var h='';ghosts.forEach(function(g){var on=g.online!==false;
-        h+='<div class="ghost-item" onclick="toggleSingleGhost(\''+g.id+'\')"><span class="ghost-item-name">'+g.id+'</span><span class="ghost-item-status '+(on?'on':'off')+'">'+(on?'ON':'OFF')+'</span></div>';});
+        h+='<div class="ghost-item" onclick="toggleSingleGhost(&#39;'+g.id+'&#39;)"><span class="ghost-item-name">'+g.id+'</span><span class="ghost-item-status '+(on?'on':'off')+'">'+(on?'ON':'OFF')+'</span></div>';});
     document.getElementById('ghost-list').innerHTML=h;}catch(e){}
 }
 
@@ -1020,7 +1020,7 @@ async function actualizar(){
                 +'<div class="scard-top"><div><div class="scard-name">'+n.id+(esRoot?' <span style="color:#06d6a0;font-size:0.7em">ROOT</span>':'')+(isGhost?'<span class="ghost-badge">FANTASMA</span>':'')+(isOn?'':'<span class="offline-badge">OFFLINE</span>')+'</div>'
                 +'<div class="scard-type">'+(n.tipo||'ESP32-interno')+'</div></div>'
                 +'<div class="scard-temp '+tempClass(n.temp)+'">'+n.temp+'&deg;</div></div>'
-                +(!isGhost?'<div style="cursor:pointer" onclick="event.stopPropagation();abrirGrafico(\''+n.id+'\')">'+miniChart(histMap[n.id]||[])+'</div>':'')
+                +(!isGhost?'<div style="cursor:pointer" onclick="event.stopPropagation();abrirGrafico(&#39;'+n.id+'&#39;)">'+miniChart(histMap[n.id]||[])+'</div>':'')
                 +signalBars(n.rssi)+hopsBadge(n.hops)+(n.rssi!=null?'</div>':'')
                 +'<div class="scard-bottom"><div class="scard-coord">'+n.lat.toFixed(4)+', '+n.lon.toFixed(4)+'</div>'
                 +'<div class="scard-time"><div class="tdot"></div>'+(n.hora||'--')+'</div></div></div>';
@@ -1154,7 +1154,7 @@ async function actualizarPromedios(){
         var gMin=Math.min.apply(null,entries.map(function(e){return e.min;})).toFixed(1);
         var gMax=Math.max.apply(null,entries.map(function(e){return e.max;})).toFixed(1);
         var tL=entries.reduce(function(a,e){return a+e.lecturas;},0);
-        h+='<div class="avg-card" onclick="abrirGrafico(\''+nid+'\')">'
+        h+='<div class="avg-card" onclick="abrirGrafico(&#39;'+nid+'&#39;)">'
             +'<div class="avg-card-header"><span class="avg-card-name">'+nid+'</span><span class="avg-card-val tc-warm">'+gP+'&deg;</span></div>'
             +'<div class="avg-grid">'
             +'<div class="avg-item">Min<span class="av cool">'+gMin+'&deg;</span></div>'
