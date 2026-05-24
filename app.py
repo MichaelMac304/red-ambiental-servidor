@@ -901,12 +901,37 @@ function miniChart(datos){
     return'<div class="minichart">'+b+'</div>';
 }
 function signalBars(rssi){
-    if(rssi===null||rssi===undefined)return'';
-    var abs=Math.abs(rssi);var level=0,cls='active';
-    if(abs<=50){level=4;cls='active';}else if(abs<=65){level=3;cls='active';}else if(abs<=75){level=2;cls='warn';}else{level=1;cls='bad';}
-    var heights=[4,7,10,14];var bars='';
-    for(var i=0;i<4;i++){var on=i<level;bars+='<div class="bar'+(on?' '+cls:'')+'" style="height:'+heights[i]+'px"></div>';}
-    return'<div class="scard-signal"><div class="signal-bars">'+bars+'</div><span class="signal-val">'+rssi+' dBm</span>';
+    if(rssi===null||rssi===undefined)return '';
+
+    var abs=Math.abs(rssi);
+    var level=0,cls='active';
+
+    if(abs<=50){
+        level=4;
+        cls='active';
+    }else if(abs<=65){
+        level=3;
+        cls='active';
+    }else if(abs<=75){
+        level=2;
+        cls='warn';
+    }else{
+        level=1;
+        cls='bad';
+    }
+
+    var heights=[4,7,10,14];
+    var bars='';
+
+    for(var i=0;i<4;i++){
+        var on=i<level;
+        bars+='<div class="bar'+(on?' '+cls:'')+'" style="height:'+heights[i]+'px"></div>';
+    }
+
+    return '<div class="scard-signal">' +
+           '<div class="signal-bars">'+bars+'</div>' +
+           '<span class="signal-val">'+rssi+' dBm</span>' +
+           '</div>';
 }
 function hopsBadge(hops){if(hops===null||hops===undefined||hops===0)return'';return'<span class="signal-hops">'+hops+' salto'+(hops>1?'s':'')+'</span>';}
 
