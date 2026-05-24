@@ -452,10 +452,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
 .splash img{width:320px;max-width:80vw;animation:splashPulse 2s ease-in-out infinite;filter:drop-shadow(0 0 40px rgba(6,214,160,0.3))}
 .splash-text{color:var(--text2);font-size:0.85em;margin-top:24px;letter-spacing:2px;text-transform:uppercase;animation:splashFade 1.5s ease-in-out infinite alternate}
 .splash-loader{width:200px;height:3px;background:var(--border);border-radius:3px;margin-top:16px;overflow:hidden}
-.splash-loader-bar{width:0%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;animation:splashLoad 2.5s ease-in-out forwards}
+.splash-loader-bar{width:0%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;animation:splashLoad 1.3s ease-in-out forwards}
 @keyframes splashPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
 @keyframes splashFade{from{opacity:0.5}to{opacity:1}}
-@keyframes splashLoad{0%{width:0%}50%{width:70%}100%{width:100%}}
+@keyframes splashLoad{0%{width:0%}60%{width:80%}100%{width:100%}}
 
 .header{
     background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);
@@ -839,7 +839,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-setTimeout(function(){document.getElementById('splash').classList.add('hidden');},3000);
+setTimeout(function(){document.getElementById('splash').classList.add('hidden');},1500);
 
 const API=window.location.origin;
 const darkTile=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'CartoDB',maxZoom:19});
