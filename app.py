@@ -802,13 +802,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
                 <div class="config-section-title">&#127777; Heatmap</div>
                 <div class="config-row">
                     <span class="config-label">Radio</span>
-                    <input type="range" class="config-slider" id="cfg-heat-radius" min="15" max="120" value="50" oninput="updateConfig()">
-                    <span class="config-value" id="cfg-heat-radius-val">50</span>
+                    <input type="range" class="config-slider" id="cfg-heat-radius" min="15" max="80" value="40" oninput="updateConfig()">
+                    <span class="config-value" id="cfg-heat-radius-val">40</span>
                 </div>
                 <div class="config-row">
                     <span class="config-label">Blur</span>
-                    <input type="range" class="config-slider" id="cfg-heat-blur" min="10" max="80" value="35" oninput="updateConfig()">
-                    <span class="config-value" id="cfg-heat-blur-val">35</span>
+                    <input type="range" class="config-slider" id="cfg-heat-blur" min="10" max="60" value="25" oninput="updateConfig()">
+                    <span class="config-value" id="cfg-heat-blur-val">25</span>
                 </div>
                 <div class="config-row">
                     <span class="config-label">Opacidad</span>
@@ -885,7 +885,7 @@ let alertConfig={temp_min:0,temp_max:55,activa:true};
 let chartInstance=null,notifEnabled=false;
 let currentChartNode=null,currentChartRange=24,chartRefreshTimer=null;
 let ghostsActive=false;
-let cfgMarkerSize=38,cfgHeatRadius=50,cfgHeatBlur=35,cfgHeatOpacity=0.4;
+let cfgMarkerSize=38,cfgHeatRadius=40,cfgHeatBlur=25,cfgHeatOpacity=0.4;
 
 const clusterGroup=L.markerClusterGroup({
     maxClusterRadius:60,spiderfyOnMaxZoom:true,showCoverageOnHover:false,zoomToBoundsOnClick:true,
@@ -1055,11 +1055,12 @@ async function actualizar(){
         var tMin=temps.length>0?Math.min.apply(null,temps):0;
         var tMax=temps.length>0?Math.max.apply(null,temps):60;
         var tRange=tMax-tMin;if(tRange<5)tRange=5;
-        var hp=onlineNodos.map(function(n){return[n.lat,n.lon,Math.max(0.05,(n.temp-tMin)/tRange)];});
-        var effectiveBlur=Math.max(cfgHeatBlur,Math.round(cfgHeatRadius*0.45));
+        var hp=onlineNodos.map(function(n){var intensity=Math.max(0.05,(n.temp-tMin)/tRange);return[n.lat,n.lon,intensity*0.6];});
+        var effectiveBlur=Math.max(cfgHeatBlur,cfgHeatRadius);
+        var dynMaxZoom=Math.min(map.getZoom()+1,18);
         if(hp.length>0){
-            heatLayer=L.heatLayer(hp,{radius:cfgHeatRadius,blur:effectiveBlur,maxZoom:18,minOpacity:cfgHeatOpacity,
-                gradient:{0.0:'#118ab2',0.25:'#06d6a0',0.5:'#ffd166',0.75:'#ef476f',1.0:'#9b2226'}});
+            heatLayer=L.heatLayer(hp,{radius:cfgHeatRadius,blur:effectiveBlur,maxZoom:dynMaxZoom,max:1.0,minOpacity:cfgHeatOpacity,
+                gradient:{0.0:'#118ab2',0.2:'#06d6a0',0.4:'#83d483',0.6:'#ffd166',0.8:'#ef476f',1.0:'#9b2226'}});
             if(showHeatmap)heatLayer.addTo(map);
         }
 
@@ -1254,6 +1255,7 @@ async function actualizarPromedios(){
 }
 
 cargarAlertConfig();actualizar();
+map.on('zoomend',function(){actualizar();});
 setInterval(actualizar,5000);
 setInterval(function(){if(document.getElementById('tab-health').classList.contains('active'))actualizarSalud();},5000);
 setInterval(function(){if(document.getElementById('tab-avg').classList.contains('active'))actualizarPromedios();},10000);
