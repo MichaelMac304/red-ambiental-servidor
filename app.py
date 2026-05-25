@@ -1051,16 +1051,13 @@ async function actualizar(){
         if(nodos.length===0){document.getElementById('station-list').innerHTML='<div class="empty"><div class="empty-icon">&#128225;</div><h3>Sin estaciones</h3><p>Enciende tus ESP32 o carga demo.</p></div>';return;}
 
         var onlineNodos=nodos.filter(function(n){return n.online!==false;});
-        var temps=onlineNodos.map(function(n){return n.temp;});
-        var tMin=temps.length>0?Math.min.apply(null,temps):0;
-        var tMax=temps.length>0?Math.max.apply(null,temps):60;
-        var tRange=tMax-tMin;if(tRange<5)tRange=5;
-        var hp=onlineNodos.map(function(n){var intensity=Math.max(0.05,(n.temp-tMin)/tRange);return[n.lat,n.lon,intensity*0.6];});
+        var TEMP_MIN=-20,TEMP_MAX=60,TEMP_RANGE=80;
+        var hp=onlineNodos.map(function(n){var intensity=Math.max(0.01,Math.min(1.0,(n.temp-TEMP_MIN)/TEMP_RANGE));return[n.lat,n.lon,intensity*0.6];});
         var effectiveBlur=Math.max(cfgHeatBlur,cfgHeatRadius);
         var dynMaxZoom=Math.min(map.getZoom()+1,18);
         if(hp.length>0){
             heatLayer=L.heatLayer(hp,{radius:cfgHeatRadius,blur:effectiveBlur,maxZoom:dynMaxZoom,max:1.0,minOpacity:cfgHeatOpacity,
-                gradient:{0.0:'#118ab2',0.2:'#06d6a0',0.4:'#83d483',0.6:'#ffd166',0.8:'#ef476f',1.0:'#9b2226'}});
+                gradient:{0.0:'#8B00FF',0.125:'#00008B',0.25:'#0066FF',0.375:'#90EE90',0.5:'#00AA00',0.625:'#FFD700',0.75:'#FF8C00',0.875:'#FF0000',1.0:'#111111'}});
             if(showHeatmap)heatLayer.addTo(map);
         }
 
