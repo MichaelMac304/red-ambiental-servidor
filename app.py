@@ -287,6 +287,21 @@ async def toggle_ghost(ghost_id: str):
         return {"ok": True, "id": ghost_id, "activo": ghost_nodes[ghost_id]["activo"]}
     return {"ok": False, "error": "Ghost node not found"}
 
+@app.post("/api/ghost/crear")
+async def crear_ghost(data: dict):
+    gid = data.get("id", "")
+    lat = data.get("lat")
+    lon = data.get("lon")
+    if not gid or lat is None or lon is None:
+        return {"ok": False, "error": "Se requiere id, lat y lon"}
+    ahora = datetime.now(timezone.utc)
+    ghost_nodes[gid] = {
+        "lat": float(lat), "lon": float(lon), "activo": True,
+        "last_temp": round(32.0 + random.uniform(-2, 2), 1),
+        "last_hora": ahora.strftime("%H:%M:%S"), "last_ts": ahora.isoformat(),
+    }
+    return {"ok": True, "id": gid, "total": len(ghost_nodes)}
+
 @app.post("/api/ghost/desactivar")
 async def desactivar_ghosts():
     ghost_nodes.clear()
@@ -805,6 +820,17 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overf
                 <div class="config-section-title">&#128123; Nodos Fantasma</div>
                 <button class="config-btn" id="btn-ghost-toggle" onclick="toggleGhosts()">&#128123; Activar nodos fantasma (14)</button>
                 <button class="config-btn danger" id="btn-ghost-clear" onclick="clearGhosts()" style="display:none">&#10060; Desactivar todos</button>
+                <div style="margin-top:8px;padding:8px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px">
+                    <div style="font-size:0.75em;font-weight:600;color:var(--text2);margin-bottom:6px">Agregar nodo fantasma</div>
+                    <div style="display:flex;gap:4px;margin-bottom:4px">
+                        <input type="text" id="ghost-new-id" placeholder="ID (ej: GHOST-15)" style="flex:1;padding:4px 6px;font-size:0.72em;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px">
+                    </div>
+                    <div style="display:flex;gap:4px;margin-bottom:4px">
+                        <input type="number" id="ghost-new-lat" placeholder="Latitud" step="0.0001" style="flex:1;padding:4px 6px;font-size:0.72em;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px">
+                        <input type="number" id="ghost-new-lon" placeholder="Longitud" step="0.0001" style="flex:1;padding:4px 6px;font-size:0.72em;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px">
+                    </div>
+                    <button class="config-btn" onclick="crearGhostCustom()" style="font-size:0.72em;padding:5px 10px">&#10133; Agregar</button>
+                </div>
                 <div class="ghost-list" id="ghost-list"></div>
             </div>
         </div>
@@ -970,6 +996,18 @@ async function clearGhosts(){
 async function toggleSingleGhost(gid){
     try{await fetch(API+'/api/ghost/toggle/'+gid,{method:'POST'});await actualizar();actualizarGhostList();}catch(e){console.error(e);}
 }
+async function crearGhostCustom(){
+    var gid=document.getElementById('ghost-new-id').value.trim();
+    var lat=document.getElementById('ghost-new-lat').value;
+    var lon=document.getElementById('ghost-new-lon').value;
+    if(!gid||!lat||!lon){alert('Completa ID, Latitud y Longitud');return;}
+    try{
+        var r=await fetch(API+'/api/ghost/crear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:gid,lat:parseFloat(lat),lon:parseFloat(lon)})});
+        var d=await r.json();
+        if(d.ok){ghostsActive=true;document.getElementById('btn-ghost-toggle').classList.add('active');document.getElementById('btn-ghost-toggle').innerHTML='&#128123; Nodos fantasma ACTIVOS';document.getElementById('btn-ghost-clear').style.display='block';document.getElementById('ghost-new-id').value='';document.getElementById('ghost-new-lat').value='';document.getElementById('ghost-new-lon').value='';await actualizar();actualizarGhostList();}
+        else{alert(d.error||'Error al crear nodo');}
+    }catch(e){console.error(e);alert('Error de conexion');}
+}
 async function actualizarGhostList(){
     if(!ghostsActive)return;
     try{
@@ -1012,9 +1050,15 @@ async function actualizar(){
         var nodos=Object.values(datos);
         if(nodos.length===0){document.getElementById('station-list').innerHTML='<div class="empty"><div class="empty-icon">&#128225;</div><h3>Sin estaciones</h3><p>Enciende tus ESP32 o carga demo.</p></div>';return;}
 
-        var hp=nodos.filter(function(n){return n.online!==false;}).map(function(n){return[n.lat,n.lon,Math.max(0.1,n.temp/60)];});
+        var onlineNodos=nodos.filter(function(n){return n.online!==false;});
+        var temps=onlineNodos.map(function(n){return n.temp;});
+        var tMin=temps.length>0?Math.min.apply(null,temps):0;
+        var tMax=temps.length>0?Math.max.apply(null,temps):60;
+        var tRange=tMax-tMin;if(tRange<5)tRange=5;
+        var hp=onlineNodos.map(function(n){return[n.lat,n.lon,Math.max(0.05,(n.temp-tMin)/tRange)];});
+        var effectiveBlur=Math.max(cfgHeatBlur,Math.round(cfgHeatRadius*0.45));
         if(hp.length>0){
-            heatLayer=L.heatLayer(hp,{radius:cfgHeatRadius,blur:cfgHeatBlur,maxZoom:18,minOpacity:cfgHeatOpacity,
+            heatLayer=L.heatLayer(hp,{radius:cfgHeatRadius,blur:effectiveBlur,maxZoom:18,minOpacity:cfgHeatOpacity,
                 gradient:{0.0:'#118ab2',0.25:'#06d6a0',0.5:'#ffd166',0.75:'#ef476f',1.0:'#9b2226'}});
             if(showHeatmap)heatLayer.addTo(map);
         }
