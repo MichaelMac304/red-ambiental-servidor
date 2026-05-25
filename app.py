@@ -224,6 +224,8 @@ async def api_resumen():
     for gid, g in ghost_nodes.items():
         if g.get("activo", True):
             all_nodes[gid] = {"temp": round(32.0 + random.uniform(-2, 2), 1), "timestamp": ahora.isoformat()}
+        else:
+            all_nodes[gid] = {"temp": g.get("last_temp", 32.0), "timestamp": g.get("last_ts", ahora.isoformat())}
     if not all_nodes:
         return {"total": 0, "online": 0, "promedio": None, "minima": None, "maxima": None, "nodos": []}
     online_count = 0
