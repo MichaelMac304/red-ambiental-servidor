@@ -224,6 +224,8 @@ async def api_resumen():
     for gid, g in ghost_nodes.items():
         if g.get("activo", True):
             all_nodes[gid] = {"temp": round(32.0 + random.uniform(-2, 2), 1), "timestamp": ahora.isoformat()}
+        else:
+            all_nodes[gid] = {"temp": g.get("last_temp", 32.0), "timestamp": g.get("last_ts", ahora.isoformat())}
     if not all_nodes:
         return {"total": 0, "online": 0, "promedio": None, "minima": None, "maxima": None, "nodos": []}
     online_count = 0
@@ -1113,7 +1115,7 @@ function checkAlerts(nodos){
         if(n.temp>alertConfig.temp_max)alertas.push(n.id+': '+n.temp+'C (sobre max '+alertConfig.temp_max+')');
     }});
     var banner=document.getElementById('alert-banner');
-    if(alertas.length>0){banner.style.display='flex';document.getElementById('alert-msg').textContent=alertas.join(' | ');sendNotification('Alerta Red Ambiental',alertas.join('\n'));}
+    if(alertas.length>0){banner.style.display='flex';document.getElementById('alert-msg').textContent=alertas.join(' | ');sendNotification('Alerta Red Ambiental',alertas.join('\\n'));}
     else{banner.style.display='none';}
     var aH='';
     if(alertas.length>0){alertas.forEach(function(a){aH+='<div style="padding:6px 0;border-bottom:1px solid var(--border);color:var(--hot)">'+a+'</div>';});}
@@ -1197,7 +1199,7 @@ async function actualizarPromedios(){
         var gMin=Math.min.apply(null,entries.map(function(e){return e.min;})).toFixed(1);
         var gMax=Math.max.apply(null,entries.map(function(e){return e.max;})).toFixed(1);
         var tL=entries.reduce(function(a,e){return a+e.lecturas;},0);
-        h+='<div class="avg-card" onclick="abrirGrafico(\''+nid+'\')">'
+        h+='<div class="avg-card" onclick="abrirGrafico(&#39;'+nid+'&#39;)">'
             +'<div class="avg-card-header"><span class="avg-card-name">'+nid+'</span><span class="avg-card-val tc-warm">'+gP+'&deg;</span></div>'
             +'<div class="avg-grid">'
             +'<div class="avg-item">Min<span class="av cool">'+gMin+'&deg;</span></div>'
